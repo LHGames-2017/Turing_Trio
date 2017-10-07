@@ -13,7 +13,7 @@ class TileType():
 
 
 class TileContent():
-    Empty, Resource, House, Player, Wall, Lava, Shop = range(7)
+    Empty, Wall, House, Lava, Resource, Shop, Player = range(7)
 
 
 class Point(object):
@@ -81,4 +81,24 @@ class ActionContent(object):
 
     def __init__(self, action_name, content):
         self.ActionName = action_name
-        self.Content = {}
+        self.Content = str(content)
+
+
+
+class LastState:
+    def __init__(self):
+        self.lastAction = ""
+        self.estimatedTotalRessources = 0
+        self.lastAction = ""
+        self.lastPos = Point(0,0)
+        self.upgradesPrices = [15000,15000,15000,15000,10000,50000,50000,50000,50000,20000]
+        self.upgradesList = ["CarryingCapacity",  "CollectingSpeed", "Defence","MaximumHealth","AttackPower","CarryingCapacity", "AttackPower", "Defence", "CollectingSpeed", "MaximumHealth"]
+        self.lastCarriedRessources = 0
+
+    def maj(self,x,y,action,carried):
+        self.lastPos = Point(x,y)
+        self.lastCarriedRessources = carried
+        self.lastAction = action
+
+
+laststate = LastState()
