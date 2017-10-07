@@ -1,5 +1,6 @@
 from flask import Flask, request
 from structs import *
+import structs
 import math
 import json
 import numpy
@@ -91,6 +92,9 @@ def create_heal_action():
 def create_purchase_action(item):
     return create_action("PurchaseAction", item)
 
+def create_upgrade_action(item):
+    return create_action("UpgradeAction", item)
+
 def deserialize_map(serialized_map):
     """
     Fonction utilitaire pour comprendre la map
@@ -153,20 +157,49 @@ def bot():
             otherPlayers.append({player_name: player_info })
 
     # return decision
+
+    #case : backpack full
     if player.CarriedRessources == player.CarryingCapacity:
         targetpos = Point(house["X"], house["Y"])
-        targetType = 2
+        targetType = 2 #target house
         print("target house")
+    #case: target ressources
     else:
         targetpos = find_resource(deserialized_map,pos)
-        targetType = 4
+        targetType = 4 #target resource
         print("target reouserce")
     print("qtite transportee :" +str(player.CarriedRessources))
+
+
+    #met a jour l'estime des ressources totales
+    if x == house["X"] and y == house["Y"]  and player.CarriedRessources == 0 and structs.laststate.lastCarriedRessources !=0:
+        structs.laststate.estimatedTotalRessources += structs.laststate.lastCarriedRessources
+
+
+    print("estimated total ressource :" + str(structs.laststate.estimatedTotalRessources))
+    #case : achat d'une upgrade si possible
+    if x == house["X"] and y == house["Y"] and structs.laststate.estimatedTotalRessources == structs.laststate.upgradesPrices[0] and structs.laststate.lastAction != "UpgradeAction":
+        upgrade = structs.laststate.upgradesList[0]
+        del(structs.laststate.upgradesList[0])
+        print("upgrade pruchased : " + upgrade)
+        structs.laststate.estimatedTotalRessources -= structs.laststate.upgradesPrices[0]
+        del(structs.laststate.upgradesPrices[0])
+        structs.laststate.lastAction = "UpgradeAction"
+
+        structs.laststate.maj(x,y,"UpgradeAction", player.CarriedRessources)
+        return create_upgrade_action(str(upgrade))
+
+
+
+    #case : mining
     if Point(x,y).Distance(Point(x,y),targetpos) <= 1.1 and targetType == 4:
+        structs.laststate.maj(x, y, "CollectAction", player.CarriedRessources)
         return create_collect_action(targetpos)
+   #case : moving toward target
     else:
         p = move_to_target(pos, targetpos)
         print(p)
+        structs.laststate.maj(x, y, "MoveAction", player.CarriedRessources)
         return create_move_action(p)
 
 @app.route("/", methods=["POST"])
@@ -177,8 +210,6 @@ def reponse():
     return bot()
 
 if __name__ == "__main__":
-    ressourcesStockees = 0
-    target = None
     app.run(host="127.0.0.1", port=8080)
 
 
