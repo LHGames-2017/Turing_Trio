@@ -15,9 +15,9 @@ app = Flask(__name__)
 def print_map(map):
     s = ""
     l = []
-    for i in range(40):
+    for i in range(100):
         l.append([])
-        for j in range(40):
+        for j in range(100):
             l[i].append(9)
 
     for i in range(20):
@@ -26,27 +26,55 @@ def print_map(map):
                 l[map[i][j].X][map[i][j].Y] = map[i][j].Content
 
 
-    for i in range(40):
-        for j in range(40):
+    for i in range(100):
+        for j in range(100):
             s += str(l[i][j])+" "
         s += "\n"
 
     return s
+
+###############################################
+
+def remapmap(map):
+    l = []
+    for i in range(50):
+        l.append([])
+        for j in range(50):
+            l[i].append(structs.Tile(9,i,j))
+
+    for i in range(20):
+        for j in range(20):
+            if not (map[i][j].Content is None):
+                l[map[i][j].X][map[i][j].Y] = map[i][j]
+    return l
 ################################################"
 
 
-def move_to_target(pos,target):
+def move_to_target(pos,target,map):
     x = pos["X"]
     y = pos["Y"]
     xt = target.X
     yt = target.Y
-    if (xt !=  x):
-        return Point(int(x + math.copysign(1,xt-x)), int(y) )
-    elif yt !=y:
-        return Point(int(x),int( y + math.copysign(1,yt-y)))
+    lava = False
+    for xx in  range(min(x,xt),max(x,xt)):
+        lava = lava or map[xx][y].Content == 3 or map[xx][y].Content == 3
+    for yy in range(min(y,yt),max(y,yt)):
+        lava = lava or map[xt][y].Content == 3 or map[xt][yy].Content == 3
+    if not lava:
+        if (xt !=  x ):
+            return Point(int(x + math.copysign(1,xt-x)), int(y) )
+        elif yt !=y:
+            return Point(int(x),int( y + math.copysign(1,yt-y)))
+        else:
+            return Point(x,y)
     else:
-        return Point(x,y)
+        if (yt != y):
+            return Point(int(x), int(y + math.copysign(1, yt - y)))
 
+        elif xt != x:
+            return Point(int(x + math.copysign(1, xt - x)), int(y))
+        else:
+            return Point(x, y)
 
 ####################################################
 def find_resource(map, pos):
@@ -65,6 +93,22 @@ def find_resource(map, pos):
 
 ###################################################""
 
+def find_house(map, pos):
+    xp = pos["X"]
+    yp = pos["Y"]
+    house_position = None
+    house_distance = 1000
+    for line in map:
+        for tile in line:
+            if tile.Content == 2 and Point(tile.X, tile.Y).Distance(Point(xp, yp),
+                                                                    Point(tile.X, tile.Y)) <= house_distance:
+                house_position, house_distance = Point(tile.X, tile.Y), Point(tile.X, tile.Y).Distance(Point(xp, yp),
+                                                                                                       Point(tile.X,
+                                                                                                             tile.Y))
+    if house_position is not None and house_position != pos.houseLocation:
+        return house_position
+    else:
+        raise Exception("aucune maison en vue  !")
 
 
 ######################################################
@@ -140,7 +184,7 @@ def bot():
     deserialized_map = deserialize_map(serialized_map)
    # print_map(deserialized_map)
     otherPlayers = []
-    s = print_map(deserialized_map)
+   # s = print_map(deserialized_map)
     print(s)
     print("bonjour " + " " + str(x) + " " + str(y))
     for player_dict in map_json["OtherPlayers"]:
@@ -156,7 +200,12 @@ def bot():
 
             otherPlayers.append({player_name: player_info })
 
+
+    remap = remapmap(deserialized_map)
     # return decision
+
+
+    #return create_upgrade_action(structs.UpgradeType().Defence)
 
     #case : backpack full
     if player.CarriedRessources == player.CarryingCapacity:
@@ -170,6 +219,7 @@ def bot():
         print("target reouserce")
     print("qtite transportee :" +str(player.CarriedRessources))
 
+  # targetpos = Point(19,15)
 
     #met a jour l'estime des ressources totales
     if x == house["X"] and y == house["Y"]  and player.CarriedRessources == 0 and structs.laststate.lastCarriedRessources !=0:
@@ -178,7 +228,7 @@ def bot():
 
     print("estimated total ressource :" + str(structs.laststate.estimatedTotalRessources))
     #case : achat d'une upgrade si possible
-    if x == house["X"] and y == house["Y"] and structs.laststate.estimatedTotalRessources == structs.laststate.upgradesPrices[0] and structs.laststate.lastAction != "UpgradeAction":
+    '''if x == house["X"] and y == house["Y"] and structs.laststate.estimatedTotalRessources == structs.laststate.upgradesPrices[0] and structs.laststate.lastAction != "UpgradeAction":
         upgrade = structs.laststate.upgradesList[0]
         del(structs.laststate.upgradesList[0])
         print("upgrade pruchased : " + upgrade)
@@ -188,7 +238,7 @@ def bot():
 
         structs.laststate.maj(x,y,"UpgradeAction", player.CarriedRessources)
         return create_upgrade_action(str(upgrade))
-
+'''
 
 
     #case : mining
@@ -197,10 +247,14 @@ def bot():
         return create_collect_action(targetpos)
    #case : moving toward target
     else:
-        p = move_to_target(pos, targetpos)
+        p = move_to_target(pos, targetpos, remap)
         print(p)
-        structs.laststate.maj(x, y, "MoveAction", player.CarriedRessources)
-        return create_move_action(p)
+        if(remap[p.X][p.Y].Content == 1):
+            structs.laststate.maj(x, y, "AttackAction", player.CarriedRessources)
+            return create_attack_action(p)
+        else:
+            structs.laststate.maj(x, y, "MoveAction", player.CarriedRessources)
+            return create_move_action(p)
 
 @app.route("/", methods=["POST"])
 def reponse():
