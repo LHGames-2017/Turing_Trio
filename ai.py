@@ -1,9 +1,73 @@
 from flask import Flask, request
 from structs import *
+import math
 import json
 import numpy
+import utils
+
 
 app = Flask(__name__)
+
+
+##########################################""""
+
+def print_map(map):
+    s = ""
+    l = []
+    for i in range(40):
+        l.append([])
+        for j in range(40):
+            l[i].append(9)
+
+    for i in range(20):
+        for j in range(20):
+            if not (map[i][j].Content is None):
+                l[map[i][j].X][map[i][j].Y] = map[i][j].Content
+
+
+    for i in range(40):
+        for j in range(40):
+            s += str(l[i][j])+" "
+        s += "\n"
+
+    return s
+################################################"
+
+
+def move_to_target(pos,target):
+    x = pos["X"]
+    y = pos["Y"]
+    xt = target.X
+    yt = target.Y
+    if (xt !=  x):
+        return Point(int(x + math.copysign(1,xt-x)), int(y) )
+    elif yt !=y:
+        return Point(int(x),int( y + math.copysign(1,yt-y)))
+    else:
+        return Point(x,y)
+
+
+####################################################
+def find_resource(map, pos):
+    xp = pos["X"]
+    yp = pos["Y"]
+    resource_position = None
+    resource_distance = 1000
+    for line in map:
+        for tile in line:
+            if tile.Content == 4 and Point(tile.X,tile.Y).Distance(Point(xp,yp),Point(tile.X,tile.Y)) <= resource_distance:
+                resource_position, resource_distance = Point(tile.X,tile.Y), Point(tile.X,tile.Y).Distance( Point(xp,yp),Point(tile.X,tile.Y))
+    if resource_position is not None :
+        return resource_position
+    else:
+        raise Exception("aucune ressource en vue  !")
+
+###################################################""
+
+
+
+######################################################
+
 
 def create_action(action_type, target):
     actionContent = ActionContent(action_type, target.__dict__)
@@ -34,7 +98,7 @@ def deserialize_map(serialized_map):
     serialized_map = serialized_map[1:]
     rows = serialized_map.split('[')
     column = rows[0].split('{')
-    deserialized_map = [[Tile() for x in range(40)] for y in range(40)]
+    deserialized_map = [[Tile() for x in range(20)] for y in range(20)]
     for i in range(len(rows) - 1):
         column = rows[i + 1].split('{')
 
@@ -64,19 +128,24 @@ def bot():
     y = pos["Y"]
     house = p["HouseLocation"]
     player = Player(p["Health"], p["MaxHealth"], Point(x,y),
-                    Point(house["X"], house["Y"]),
+                    Point(house["X"], house["Y"]), 0,
                     p["CarriedResources"], p["CarryingCapacity"])
 
     # Map
     serialized_map = map_json["CustomSerializedMap"]
     deserialized_map = deserialize_map(serialized_map)
-
+   # print_map(deserialized_map)
     otherPlayers = []
-
+    s = print_map(deserialized_map)
+    print(s)
+    print("bonjour " + " " + str(x) + " " + str(y))
     for player_dict in map_json["OtherPlayers"]:
         for player_name in player_dict.keys():
             player_info = player_dict[player_name]
+            if player_info == 'notAPlayer':
+                continue
             p_pos = player_info["Position"]
+
             player_info = PlayerInfo(player_info["Health"],
                                      player_info["MaxHealth"],
                                      Point(p_pos["X"], p_pos["Y"]))
@@ -84,7 +153,21 @@ def bot():
             otherPlayers.append({player_name: player_info })
 
     # return decision
-    return create_move_action(Point(0,1))
+    if player.CarriedRessources == player.CarryingCapacity:
+        targetpos = Point(house["X"], house["Y"])
+        targetType = 2
+        print("target house")
+    else:
+        targetpos = find_resource(deserialized_map,pos)
+        targetType = 4
+        print("target reouserce")
+    print("qtite transportee :" +str(player.CarriedRessources))
+    if Point(x,y).Distance(Point(x,y),targetpos) <= 1.1 and targetType == 4:
+        return create_collect_action(targetpos)
+    else:
+        p = move_to_target(pos, targetpos)
+        print(p)
+        return create_move_action(p)
 
 @app.route("/", methods=["POST"])
 def reponse():
@@ -94,4 +177,12 @@ def reponse():
     return bot()
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=3000)
+    ressourcesStockees = 0
+    target = None
+    app.run(host="127.0.0.1", port=8080)
+
+
+
+
+
+
